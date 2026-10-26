@@ -1,0 +1,158 @@
+.page {
+  min-height: 100vh;
+  background: #1d1d1d;
+  color: #222;
+}
+
+.header {
+  display: flex;
+  height: 38px;
+  align-items: center;
+  padding: 0 12px;
+  color: #aaa;
+}
+
+.title {
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.main {
+  display: grid;
+  min-height: calc(100vh - 50px);
+  margin: 0 12px 12px;
+  place-items: center;
+  background: #fff;
+  padding: 24px;
+}
+
+.panel {
+  display: flex;
+  width: min(100%, 300px);
+  flex-direction: column;
+  align-items: center;
+}
+
+.form {
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.input {
+  width: 100%;
+  min-height: 42px;
+  border: 1px solid #c84b0d;
+  border-radius: 5px;
+  background: #fff;
+  color: #222;
+  font: inherit;
+  font-size: 14px;
+  padding: 0 10px;
+}
+
+.input::placeholder {
+  color: #9b684e;
+  opacity: 1;
+}
+
+.input:focus-visible {
+  outline: 2px solid #222;
+  outline-offset: 2px;
+}
+
+.submitButton,
+.secondaryButton,
+.backLink {
+  display: grid;
+  min-height: 42px;
+  place-items: center;
+  border-radius: 5px;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+  transition: background-color 150ms ease;
+}
+
+.submitButton,
+.secondaryButton {
+  border: 0;
+}
+
+.submitButton {
+  background: #c84b0d;
+  color: #fff;
+  cursor: pointer;
+}
+
+.submitButton:hover {
+  background: #a93d09;
+}
+
+.secondaryButton {
+  background: #f3e8e1;
+  color: #7b310c;
+  cursor: pointer;
+}
+
+.secondaryButton:hover {
+  background: #ead5c8;
+}
+
+.submitButton:focus-visible,
+.secondaryButton:focus-visible,
+.backLink:focus-visible {
+  outline: 3px solid #222;
+  outline-offset: 3px;
+}
+
+.error {
+  color: #a12618;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.success {
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  gap: 12px;
+  text-align: center;
+}
+
+.success h2 {
+  color: #7b310c;
+  font-size: 20px;
+}
+
+.success p {
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.backLink {
+  background: #c84b0d;
+  color: #fff;
+}
+
+.backLink:hover {
+  background: #a93d09;
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  clip-path: inset(50%);
+}
