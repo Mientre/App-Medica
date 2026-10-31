@@ -3,25 +3,37 @@
 import Link from "next/link";
 import { useState } from "react";
 import type { FormEvent } from "react";
+import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
 import styles from "./registro.module.css";
 
 export default function RegistroPage() {
   const [error, setError] = useState("");
-  const [username, setUsername] = useState("");
+  const [patientName, setPatientName] = useState("");
+  const [patientEmail, setPatientEmail] = useState("");
   const [doctorName, setDoctorName] = useState("");
   const [registered, setRegistered] = useState(false);
+  const [confirmationRequired, setConfirmationRequired] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
     const password = formData.get("password");
     const passwordConfirmation = formData.get("passwordConfirmation");
-    const doctorName = formData.get("doctorName");
+    const doctorEmail = formData.get("doctorEmail");
+    const age = formData.get("age");
 
     if (
-      typeof doctorName !== "string" ||
-      !/^[\p{L}]+(?:[ '-][\p{L}]+)+$/u.test(doctorName.trim())
+      typeof password !== "string" ||
+      typeof passwordConfirmation !== "string" ||
+      typeof doctorEmail !== "string" ||
+      typeof age !== "string"
     ) {
+      setError("Revisa los datos del formulario e inténtalo de nuevo.");
+      return;
+    }
+
+    if (!/^[\p{L}]+(?:[ '-][\p{L}]+)+$/u.test(doctorName.trim())) {
       setError("Escribe el nombre y apellido del doctor usando solo letras.");
       return;
     }
@@ -31,8 +43,42 @@ export default function RegistroPage() {
       return;
     }
 
+    const supabase = createSupabaseBrowserClient();
+    if (!supabase) {
+      setError("Falta configurar la URL y la clave publishable de Supabase.");
+      return;
+    }
+
     setError("");
-    setRegistered(true);
+    setIsSubmitting(true);
+
+    try {
+      const { data, error: signUpError } = await supabase.auth.signUp({
+        email: patientEmail.trim().toLowerCase(),
+        password,
+        options: {
+          data: {
+            patient_name: patientName.trim(),
+            age: Number(age),
+            doctor_name: doctorName.trim(),
+            doctor_email: doctorEmail.trim().toLowerCase(),
+          },
+          emailRedirectTo: `${window.location.origin}/login`,
+        },
+      });
+
+      if (signUpError) {
+        setError(signUpError.message);
+        return;
+      }
+
+      setConfirmationRequired(!data.session);
+      setRegistered(true);
+    } catch {
+      setError("No fue posible conectar con Supabase. Inténtalo de nuevo.");
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   return (
@@ -46,8 +92,9 @@ export default function RegistroPage() {
             <div className={styles.success} role="status">
               <h2>¡Registro exitoso!</h2>
               <p>
-                Esta es una demostración: no se creó una cuenta ni se guardaron
-                tus datos.
+                {confirmationRequired
+                  ? "Si el correo puede registrarse, recibirás un mensaje para confirmar la cuenta. Revisa la bandeja de entrada."
+                  : "La cuenta de Supabase Auth y el perfil del paciente se crearon correctamente."}
               </p>
               <Link className={styles.backLink} href="/">
                 Volver al inicio
@@ -55,25 +102,42 @@ export default function RegistroPage() {
             </div>
           ) : (
             <form className={styles.form} onSubmit={handleSubmit}>
-              <label className={styles.srOnly} htmlFor="username">
-                Nombre de usuario
+              <label className={styles.srOnly} htmlFor="patientName">
+                Nombre del paciente
               </label>
               <input
                 className={styles.input}
-                id="username"
-                name="username"
+                id="patientName"
+                name="patientName"
                 type="text"
-                autoComplete="username"
-                placeholder="Nombre de usuario"
-                value={username}
+                autoComplete="name"
+                placeholder="Nombre del paciente"
+                value={patientName}
                 onChange={(event) => {
-                  const lettersOnly = event.target.value.replace(/[^\p{L}]/gu, "");
-                  setUsername(
-                    lettersOnly.replace(/^(\p{L})/u, (firstLetter) =>
+                  const nameCharacters = event.target.value.replace(
+                    /[^\p{L} '-]/gu,
+                    "",
+                  );
+                  setPatientName(
+                    nameCharacters.replace(/^(\p{L})/u, (firstLetter) =>
                       firstLetter.toLocaleUpperCase("es"),
                     ),
                   );
                 }}
+                required
+              />
+              <label className={styles.srOnly} htmlFor="patientEmail">
+                Correo del paciente
+              </label>
+              <input
+                className={styles.input}
+                id="patientEmail"
+                name="patientEmail"
+                type="email"
+                autoComplete="email"
+                placeholder="Correo del paciente"
+                value={patientEmail}
+                onChange={(event) => setPatientEmail(event.target.value)}
                 required
               />
               <label className={styles.srOnly} htmlFor="password">
@@ -113,8 +177,8 @@ export default function RegistroPage() {
                 id="age"
                 name="age"
                 type="number"
-                min="18"
-                max="65"
+                min="60"
+                max="100"
                 step="1"
                 placeholder="Edad"
                 required
@@ -160,7 +224,7 @@ export default function RegistroPage() {
                 </p>
               )}
               <button className={styles.submitButton} type="submit">
-                Registrar
+                {isSubmitting ? "Registrando..." : "Registrar"}
               </button>
               <Link className={styles.backLink} href="/">
                 Volver al inicio

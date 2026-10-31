@@ -1,0 +1,131 @@
+-- Tablas para perfiles vinculados con cuentas de Supabase Auth.
+-- Este script se puede ejecutar en un proyecto que ya tenga las tablas originales.
+
+CREATE TABLE IF NOT EXISTS public.doctores (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    nombre_completo TEXT NOT NULL,
+    correo_electronico TEXT UNIQUE NOT NULL,
+    creado_en TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS public.pacientes (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    auth_user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+    correo_electronico TEXT,
+    nombre TEXT NOT NULL,
+    edad INT NOT NULL,
+    presion_arterial TEXT,
+    frecuencia_cardiaca INT,
+    saturacion_oxigeno NUMERIC(5,2),
+    temperatura_expuesta NUMERIC(4,2),
+    temperatura_paciente NUMERIC(4,2),
+    doctor_id UUID REFERENCES public.doctores(id) ON DELETE SET NULL,
+    creado_en TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+ALTER TABLE public.pacientes
+    ADD COLUMN IF NOT EXISTS auth_user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE;
+ALTER TABLE public.pacientes
+    ADD COLUMN IF NOT EXISTS correo_electronico TEXT;
+
+-- Supabase Auth se encarga de las contraseñas; elimina la columna local anterior.
+ALTER TABLE public.pacientes DROP COLUMN IF EXISTS contrasena;
+
+CREATE UNIQUE INDEX IF NOT EXISTS pacientes_auth_user_id_unique
+    ON public.pacientes (auth_user_id)
+    WHERE auth_user_id IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS pacientes_correo_electronico_unique
+    ON public.pacientes (correo_electronico)
+    WHERE correo_electronico IS NOT NULL;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conname = 'pacientes_edad_rango'
+          AND conrelid = 'public.pacientes'::regclass
+    ) THEN
+        ALTER TABLE public.pacientes
+            ADD CONSTRAINT pacientes_edad_rango
+            CHECK (edad BETWEEN 60 AND 100) NOT VALID;
+    END IF;
+END
+$$;
+
+CREATE OR REPLACE FUNCTION public.handle_new_auth_patient()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+DECLARE
+    patient_name TEXT := btrim(NEW.raw_user_meta_data ->> 'patient_name');
+    doctor_name TEXT := btrim(NEW.raw_user_meta_data ->> 'doctor_name');
+    doctor_email TEXT := lower(btrim(NEW.raw_user_meta_data ->> 'doctor_email'));
+    patient_age INTEGER;
+    linked_doctor_id UUID;
+BEGIN
+    IF NEW.email IS NULL OR patient_name = '' OR
+       patient_name !~ '^[[:alpha:]]+([ ''-][[:alpha:]]+)*$' THEN
+        RAISE EXCEPTION 'Invalid patient email or name';
+    END IF;
+
+    IF doctor_name !~ '^[[:alpha:]]+([ ''-][[:alpha:]]+)+$' OR
+       doctor_email !~ '^[^[:space:]@]+@gmail\.com$' THEN
+        RAISE EXCEPTION 'Invalid doctor name or email';
+    END IF;
+
+    IF (NEW.raw_user_meta_data ->> 'age') !~ '^[0-9]{1,3}$' THEN
+        RAISE EXCEPTION 'Invalid patient age';
+    END IF;
+
+    patient_age := (NEW.raw_user_meta_data ->> 'age')::INTEGER;
+    IF patient_age < 60 OR patient_age > 100 THEN
+        RAISE EXCEPTION 'Patient age must be between 60 and 100';
+    END IF;
+
+    INSERT INTO public.doctores (nombre_completo, correo_electronico)
+    VALUES (doctor_name, doctor_email)
+    ON CONFLICT (correo_electronico) DO NOTHING;
+
+    SELECT id INTO linked_doctor_id
+    FROM public.doctores
+    WHERE correo_electronico = doctor_email;
+
+    INSERT INTO public.pacientes (
+        auth_user_id,
+        correo_electronico,
+        nombre,
+        edad,
+        doctor_id
+    )
+    VALUES (
+        NEW.id,
+        lower(NEW.email),
+        patient_name,
+        patient_age,
+        linked_doctor_id
+    );
+
+    RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS on_auth_user_created_patient ON auth.users;
+CREATE TRIGGER on_auth_user_created_patient
+    AFTER INSERT ON auth.users
+    FOR EACH ROW
+    EXECUTE FUNCTION public.handle_new_auth_patient();
+
+ALTER TABLE public.pacientes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.doctores ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Patients can view own profile" ON public.pacientes;
+CREATE POLICY "Patients can view own profile"
+    ON public.pacientes
+    FOR SELECT
+    TO authenticated
+    USING ((SELECT auth.uid()) = auth_user_id);
+
+GRANT SELECT ON TABLE public.pacientes TO authenticated;

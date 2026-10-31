@@ -1,0 +1,107 @@
+.page {
+  min-height: 100vh;
+  background: #fff;
+  color: #222;
+}
+
+.header {
+  display: flex;
+  height: 34px;
+  align-items: center;
+  padding: 0 8px;
+  background: #1d1d1d;
+  color: #aaa;
+}
+
+.title {
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.main {
+  position: relative;
+  display: grid;
+  min-height: calc(100vh - 34px);
+  place-items: center;
+  padding: 24px;
+}
+
+.actions {
+  display: flex;
+  width: min(100%, 220px);
+  flex-direction: column;
+  gap: 6px;
+}
+
+.actionButton {
+  display: grid;
+  width: 100%;
+  min-height: 38px;
+  place-items: center;
+  border: 0;
+  border-radius: 4px;
+  background: #c84b0d;
+  color: #fff;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  text-decoration: none;
+  transition: background-color 150ms ease;
+}
+
+.actionButton:hover {
+  background: #a93d09;
+}
+
+.actionButton:focus-visible {
+  outline: 3px solid #222;
+  outline-offset: 3px;
+}
+
+.actionButton:disabled {
+  cursor: wait;
+  opacity: 0.75;
+}
+
+.error {
+  position: absolute;
+  right: 24px;
+  bottom: 12px;
+  left: 24px;
+  color: #a12618;
+  font-size: 13px;
+  text-align: center;
+}
+
+.modalBackdrop {
+  position: fixed;
+  z-index: 1;
+  display: grid;
+  padding: 20px;
+  background: rgb(0 0 0 / 55%);
+  inset: 0;
+  place-items: center;
+}
+
+.modal {
+  display: flex;
+  width: min(100%, 360px);
+  flex-direction: column;
+  gap: 14px;
+  border-radius: 8px;
+  background: #fff;
+  padding: 24px;
+  box-shadow: 0 12px 36px rgb(0 0 0 / 24%);
+  text-align: center;
+}
+
+.modal h2 {
+  color: #7b310c;
+  font-size: 18px;
+}
+
+.modal p {
+  color: #444;
+  font-size: 14px;
+  line-height: 1.5;
+}
