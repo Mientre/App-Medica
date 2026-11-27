@@ -68,6 +68,17 @@ export default function MenuPrincipalPage() {
     setIsSigningOut(true);
 
     try {
+      const { error: deviceSessionError } = await supabase.functions.invoke(
+        "device-session",
+        { body: { action: "end" } },
+      );
+      if (deviceSessionError) {
+        setError(
+          `No se pudo liberar la sesión del ESP32: ${deviceSessionError.message}`,
+        );
+        return;
+      }
+
       const { error: signOutError } = await supabase.auth.signOut();
       if (signOutError) {
         setError(`No se pudo cerrar la sesión: ${signOutError.message}`);

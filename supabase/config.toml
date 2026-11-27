@@ -1,0 +1,7 @@
+project_id = "app-medica"
+
+[functions.ingest-esp32]
+verify_jwt = false
+
+[functions.device-session]
+verify_jwt = true

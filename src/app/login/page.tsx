@@ -59,17 +59,55 @@ export default function LoginPage() {
     setIsSubmitting(true);
 
     try {
-      const { error } = await supabase.auth.signInWithPassword({
+      const { error: signInError } = await supabase.auth.signInWithPassword({
         email: email.trim().toLowerCase(),
         password,
       });
 
-      if (error) {
+      if (signInError) {
         setFeedback({
           title: "No se pudo iniciar sesión",
-          message: /email not confirmed/i.test(error.message)
+          message: /email not confirmed/i.test(signInError.message)
             ? "La cuenta todavía no está confirmada. Para permitir el acceso de prueba, desactiva temporalmente la confirmación de correo en la configuración de Supabase Auth."
-            : error.message,
+            : signInError.message,
+        });
+        return;
+      }
+
+      const { data: deviceSession, error: deviceSessionError } =
+        await supabase.functions.invoke("device-session", {
+          body: { action: "start" },
+        });
+
+      if (deviceSessionError) {
+        const { error: signOutError } = await supabase.auth.signOut({
+          scope: "local",
+        });
+        setFeedback({
+          title: "No se pudo activar la sesión del dispositivo",
+          message: signOutError
+            ? `${deviceSessionError.message} No se pudo cerrar la sesión local: ${signOutError.message}`
+            : deviceSessionError.message,
+        });
+        return;
+      }
+
+      if (deviceSession?.active !== true) {
+        const { error: signOutError } = await supabase.auth.signOut({
+          scope: "local",
+        });
+        setFeedback({
+          title: "ESP32 ocupado",
+          message: [
+            typeof deviceSession?.message === "string"
+              ? deviceSession.message
+              : "No se pudo asociar el ESP32 a este paciente.",
+            signOutError
+              ? `No se pudo cerrar la sesión local: ${signOutError.message}`
+              : "",
+          ]
+            .filter(Boolean)
+            .join(" "),
         });
         return;
       }

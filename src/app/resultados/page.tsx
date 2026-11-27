@@ -6,13 +6,23 @@ import { useRouter } from "next/navigation";
 import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
 import styles from "./resultados.module.css";
 
-type PatientResults = {
+type PatientProfile = {
+  id: string;
   nombre: string;
-  presion_arterial: string | null;
+};
+
+type PatientReading = {
+  presion_sistolica: number | null;
+  presion_diastolica: number | null;
   frecuencia_cardiaca: number | null;
   saturacion_oxigeno: number | null;
   temperatura_expuesta: number | null;
+  humedad_ambiente: number | null;
   temperatura_paciente: number | null;
+};
+
+type PatientResults = PatientProfile & {
+  reading: PatientReading | null;
 };
 
 type StatusTone = "normal" | "alert" | "unknown";
@@ -43,18 +53,14 @@ function getNumericMeasurementStatus(
     : { label: "Alerta", tone: "alert" };
 }
 
-function getBloodPressureStatus(value: string | null): MeasurementStatus {
-  if (!value?.trim()) {
+function getBloodPressureStatus(
+  systolic: number | null,
+  diastolic: number | null,
+): MeasurementStatus {
+  if (systolic === null || diastolic === null) {
     return { label: "Sin dato", tone: "unknown" };
   }
 
-  const match = /^\s*(\d{2,3})\s*\/\s*(\d{2,3})\s*$/.exec(value);
-  if (!match) {
-    return { label: "Alerta", tone: "alert" };
-  }
-
-  const systolic = Number(match[1]);
-  const diastolic = Number(match[2]);
   const isWithinOrientativeRange =
     systolic >= 90 &&
     systolic <= 120 &&
@@ -100,9 +106,7 @@ export default function ResultadosPage() {
 
       const { data: profile, error: profileError } = await supabase
         .from("pacientes")
-        .select(
-          "nombre,presion_arterial,frecuencia_cardiaca,saturacion_oxigeno,temperatura_expuesta,temperatura_paciente",
-        )
+        .select("id,nombre")
         .eq("auth_user_id", data.user.id)
         .maybeSingle();
 
@@ -117,7 +121,38 @@ export default function ResultadosPage() {
           "No encontramos el perfil del paciente. Verifica que el registro se haya completado correctamente.",
         );
       } else {
-        setPatient(profile);
+        const { data: reading, error: readingError } = await supabase
+          .from("lecturas_paciente")
+          .select(
+            "presion_sistolica,presion_diastolica,ritmo_cardiaco,temperatura_expuesta,humedad_ambiente,temperatura_paciente,spo2",
+          )
+          .eq("paciente_id", profile.id)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (!active) {
+          return;
+        }
+
+        if (readingError) {
+          setError("No se pudo cargar la lectura más reciente del paciente.");
+        } else {
+          setPatient({
+            ...profile,
+            reading: reading
+              ? {
+                  presion_sistolica: reading.presion_sistolica,
+                  presion_diastolica: reading.presion_diastolica,
+                  frecuencia_cardiaca: reading.ritmo_cardiaco,
+                  saturacion_oxigeno: reading.spo2,
+                  temperatura_expuesta: reading.temperatura_expuesta,
+                  humedad_ambiente: reading.humedad_ambiente,
+                  temperatura_paciente: reading.temperatura_paciente,
+                }
+              : null,
+          });
+        }
       }
 
       setIsLoading(false);
@@ -129,26 +164,33 @@ export default function ResultadosPage() {
     };
   }, [router]);
 
+  const reading = patient?.reading ?? null;
   const pressureStatus = getBloodPressureStatus(
-    patient?.presion_arterial ?? null,
+    reading?.presion_sistolica ?? null,
+    reading?.presion_diastolica ?? null,
   );
   const heartRateStatus = getNumericMeasurementStatus(
-    patient?.frecuencia_cardiaca ?? null,
+    reading?.frecuencia_cardiaca ?? null,
     60,
     100,
   );
   const oxygenStatus = getNumericMeasurementStatus(
-    patient?.saturacion_oxigeno ?? null,
+    reading?.saturacion_oxigeno ?? null,
     95,
     100,
   );
   const ambientTemperatureStatus: MeasurementStatus =
-    patient?.temperatura_expuesta === null ||
-    patient?.temperatura_expuesta === undefined
+    reading?.temperatura_expuesta === null ||
+    reading?.temperatura_expuesta === undefined
+      ? { label: "Sin dato", tone: "unknown" }
+      : { label: "Sin criterio", tone: "unknown" };
+  const ambientHumidityStatus: MeasurementStatus =
+    reading?.humedad_ambiente === null ||
+    reading?.humedad_ambiente === undefined
       ? { label: "Sin dato", tone: "unknown" }
       : { label: "Sin criterio", tone: "unknown" };
   const bodyTemperatureStatus = getNumericMeasurementStatus(
-    patient?.temperatura_paciente ?? null,
+    reading?.temperatura_paciente ?? null,
     36.1,
     37.2,
   );
@@ -179,7 +221,10 @@ export default function ResultadosPage() {
                   <dt className={styles.label}>Presión arterial</dt>
                   <dd className={styles.pressureResult}>
                     <span className={styles.pressureValue}>
-                      {displayMeasurement(patient.presion_arterial)}
+                      {reading?.presion_sistolica == null ||
+                      reading.presion_diastolica == null
+                        ? "----"
+                        : `${reading.presion_sistolica}/${reading.presion_diastolica}`}
                     </span>
                     <span
                       className={`${styles.pressureStatus} ${styles[pressureStatus.tone]}`}
@@ -194,7 +239,7 @@ export default function ResultadosPage() {
                   <dt className={styles.label}>Frecuencia cardíaca</dt>
                   <dd className={styles.pressureResult}>
                     <span className={styles.pressureValue}>
-                      {displayMeasurement(patient.frecuencia_cardiaca, " lpm")}
+                      {displayMeasurement(reading?.frecuencia_cardiaca ?? null, " lpm")}
                     </span>
                     <span
                       className={`${styles.pressureStatus} ${styles[heartRateStatus.tone]}`}
@@ -209,7 +254,7 @@ export default function ResultadosPage() {
                   <dt className={styles.label}>Saturación de oxígeno</dt>
                   <dd className={styles.pressureResult}>
                     <span className={styles.pressureValue}>
-                      {displayMeasurement(patient.saturacion_oxigeno, "%")}
+                      {displayMeasurement(reading?.saturacion_oxigeno ?? null, "%")}
                     </span>
                     <span
                       className={`${styles.pressureStatus} ${styles[oxygenStatus.tone]}`}
@@ -224,7 +269,7 @@ export default function ResultadosPage() {
                   <dt className={styles.label}>Temperatura ambiental</dt>
                   <dd className={styles.pressureResult}>
                     <span className={styles.pressureValue}>
-                    {displayMeasurement(patient.temperatura_expuesta, " °C")}
+                      {displayMeasurement(reading?.temperatura_expuesta ?? null, " °C")}
                     </span>
                     <span
                       className={`${styles.pressureStatus} ${styles[ambientTemperatureStatus.tone]}`}
@@ -236,10 +281,25 @@ export default function ResultadosPage() {
                   </dd>
                 </div>
                 <div className={styles.row}>
+                  <dt className={styles.label}>Humedad ambiental</dt>
+                  <dd className={styles.pressureResult}>
+                    <span className={styles.pressureValue}>
+                      {displayMeasurement(reading?.humedad_ambiente ?? null, "%")}
+                    </span>
+                    <span
+                      className={`${styles.pressureStatus} ${styles[ambientHumidityStatus.tone]}`}
+                      aria-label={`Clasificación de humedad ambiental: ${ambientHumidityStatus.label}`}
+                      title="No se definió un rango para clasificar la humedad ambiental"
+                    >
+                      {ambientHumidityStatus.label}
+                    </span>
+                  </dd>
+                </div>
+                <div className={styles.row}>
                   <dt className={styles.label}>Temperatura del paciente</dt>
                   <dd className={styles.pressureResult}>
                     <span className={styles.pressureValue}>
-                      {displayMeasurement(patient.temperatura_paciente, " °C")}
+                      {displayMeasurement(reading?.temperatura_paciente ?? null, " °C")}
                     </span>
                     <span
                       className={`${styles.pressureStatus} ${styles[bodyTemperatureStatus.tone]}`}

@@ -13,6 +13,14 @@ const eslintConfig = defineConfig([
     "build/**",
     "next-env.d.ts",
   ]),
+  {
+    files: ["supabase/functions/**/*.ts"],
+    languageOptions: {
+      globals: {
+        Deno: "readonly",
+      },
+    },
+  },
 ]);
 
 export default eslintConfig;
